@@ -3,6 +3,18 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <LangVersion>latest</LangVersion>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <PackageId>Logfile</PackageId>
+    <Authors>Kristian Virkus</Authors>
+    <Company>Kristian Virkus</Company>
+    <Product>Logfile</Product>
+    <Description>A logging library for structured log events with fluent syntax.</Description>
+    <Copyright>Kristian Virkus</Copyright>
+    <PackageLicenseUrl>https://raw.githubusercontent.com/KristianVirkus/Logfile/master/LICENSE</PackageLicenseUrl>
+    <PackageProjectUrl>https://github.com/KristianVirkus/Logfile</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/KristianVirkus/Logfile</RepositoryUrl>
+    <PackageTags>logging logfile fluent syntax loglevel extensible sensitive secure encryption binary database disk console exception message</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
