@@ -34,7 +34,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="EventRouter" Version="1.0.1" />
+    <PackageReference Include="EventRouter" Version="1.0.2" />
   </ItemGroup>
 
 </Project>
