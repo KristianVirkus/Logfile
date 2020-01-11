@@ -8,310 +8,355 @@ using System.Threading;
 
 namespace Logfile.Core.Details
 {
-	/// <summary>
-	/// Represents event ID log event details.
-	/// </summary>
-	public class EventID
-	{
-		/// <summary>
-		/// Gets the chain of texts representing the event.
-		/// </summary>
-		public IEnumerable<string> TextChain { get; protected set; }
+    /// <summary>
+    /// Represents event ID log event details.
+    /// </summary>
+    public class EventID
+    {
+        /// <summary>
+        /// Gets the chain of texts representing the event.
+        /// </summary>
+        public IEnumerable<string> TextChain { get; protected set; }
 
-		/// <summary>
-		/// Gets the chain of numbers representing the event.
-		/// </summary>
-		public IEnumerable<int> NumberChain { get; protected set; }
+        /// <summary>
+        /// Gets the chain of numbers representing the event.
+        /// </summary>
+        public IEnumerable<int> NumberChain { get; protected set; }
 
-		/// <summary>
-		/// Initializes a new instance of the <see cref="EventID"/> class.
-		/// </summary>
-		/// <param name="textChain">The chain of texts representing
-		///		the event.</param>
-		/// <param name="numberChain">The chain of numbers representing
-		///		the event.</param>
-		public EventID(IEnumerable<string> textChain, IEnumerable<int> numberChain)
-		{
-			this.TextChain = textChain;
-			this.NumberChain = numberChain;
-		}
+        /// <summary>
+        /// Gets the event parameter names.
+        /// </summary>
+        public IEnumerable<string> ParameterNames { get; protected set; }
 
-		public override string ToString()
-		{
-			var sb = new StringBuilder();
+        /// <summary>
+        /// The event arguments.
+        /// </summary>
+        public IEnumerable<string> StringArguments { get; }
 
-			sb.Append(string.Join(".", this.TextChain ?? new string[0]));
+        /// <summary>
+        /// Initializes a new instance of the <see cref="EventID"/> class.
+        /// </summary>
+        /// <param name="textChain">The chain of texts representing
+        ///		the event.</param>
+        /// <param name="numberChain">The chain of numbers representing
+        ///		the event.</param>
+        /// <param name="args">The event arguments.</param>
+        public EventID(IEnumerable<string> textChain, IEnumerable<int> numberChain,
+            params string[] args)
+        {
+            this.TextChain = textChain;
+            this.NumberChain = numberChain;
+            this.StringArguments = args;
+        }
 
-			var numbers = string.Join(".", this.NumberChain ?? new int[0]);
-			if (numbers.Length > 0)
-			{
-				if (sb.Length > 0) numbers = $" ({numbers})";
-				sb.Append(numbers);
-			}
+        /// <summary>
+        /// Initializes a new instance of the <see cref="EventID"/> class.
+        /// </summary>
+        /// <param name="textChain">The chain of texts representing
+        ///		the event.</param>
+        /// <param name="numberChain">The chain of numbers representing
+        ///		the event.</param>
+        ///	<param name="parameterNames">The parameter names.</param>
+        /// <param name="args">The event arguments.</param>
+        public EventID(IEnumerable<string> textChain, IEnumerable<int> numberChain,
+            IEnumerable<string> parameterNames, IEnumerable<string> args)
+        {
+            this.TextChain = textChain;
+            this.NumberChain = numberChain;
+            this.ParameterNames = parameterNames;
+            this.StringArguments = args;
+        }
 
-			return sb.ToString();
-		}
-	}
+        public override string ToString()
+        {
+            var sb = new StringBuilder();
 
-	/// <summary>
-	/// Represents an event ID.
-	/// </summary>
-	/// <typeparam name="TEvent">The log event type.</typeparam>
-	public class EventID<TEvent> : EventID
-		where TEvent : Enum
-	{
-		static readonly ReaderWriterLockSlim sync;
-		static readonly Dictionary<Type, CachedItem> typeCache;
-		static readonly Dictionary<TEvent, CachedEvent> eventCache;
+            sb.Append(string.Join(".", this.TextChain ?? new string[0]));
 
-		/// <summary>
-		/// The event enumeration member.
-		/// </summary>
-		public TEvent Enum { get; }
+            var numbers = string.Join(".", this.NumberChain ?? new int[0]);
+            if (numbers.Length > 0)
+            {
+                if (sb.Length > 0) numbers = $" ({numbers})";
+                sb.Append(numbers);
+            }
 
-		/// <summary>
-		/// Gets the event parameter names.
-		/// </summary>
-		public IEnumerable<string> ParameterNames { get; }
+            if (this.StringArguments?.Any() == true)
+            {
+                sb.Append(" {");
+                int i = 0;
+                foreach (var arg in this.StringArguments)
+                {
+                    if (i > 0)
+                        sb.Append(",");
+                    if (this.ParameterNames?.Count() >= i + 1)
+                    {
+                        var parameterName = this.ParameterNames.ElementAt(i);
+                        if (parameterName != null)
+                            sb.Append($"{parameterName}=");
+                    }
 
-		/// <summary>
-		/// The event arguments.
-		/// </summary>
-		public IEnumerable<string> StringArguments { get; }
+                    if (arg == null)
+                        sb.Append("null");
+                    else
+                        sb.Append($@"""{arg}""");
+                    ++i;
+                }
 
-		static EventID()
-		{
-			sync = new ReaderWriterLockSlim();
-			typeCache = new Dictionary<Type, CachedItem>();
-			eventCache = new Dictionary<TEvent, CachedEvent>();
-		}
+                sb.Append("}");
+            }
 
-		/// <summary>
-		/// Initializes a new instance of the <see cref="EventID"/> class.
-		/// </summary>
-		/// <param name="e">The event enum member.</param>
-		/// <param name="args">The event arguments.</param>
-		public EventID(TEvent e, params string[] args)
-			: base(null, null)
-		{
-			this.Enum = e;
-			this.StringArguments = args;
+            return sb.ToString();
+        }
+    }
 
-			sync.EnterUpgradeableReadLock();
-			try
-			{
-				if (!eventCache.TryGetValue(e, out var cachedEvent))
-				{
-					// Cache event.
-					sync.EnterWriteLock();
-					try
-					{
-						var type = getTypeOrCacheType(e.GetType());
+    /// <summary>
+    /// Represents an event ID.
+    /// </summary>
+    /// <typeparam name="TEvent">The log event type.</typeparam>
+    public class EventID<TEvent> : EventID
+        where TEvent : Enum
+    {
+        static readonly ReaderWriterLockSlim sync;
+        static readonly Dictionary<Type, CachedItem> typeCache;
+        static readonly Dictionary<TEvent, CachedEvent> eventCache;
 
-						IEnumerable<string> parameterNames = null;
-						var parametersAtts = from d in e.GetType().GetMember(e.ToString()).Single().GetCustomAttributesData()
-											 where d.AttributeType.IsAssignableFrom(typeof(ParametersAttribute))
-											 select d;
-						var parametersAtt = parametersAtts.LastOrDefault();
-						if (parametersAtt != null)
-						{
-							parameterNames = (parametersAtt.ConstructorArguments.OfType<CustomAttributeTypedArgument?>().FirstOrDefault()?.Value as ReadOnlyCollection<CustomAttributeTypedArgument>)?.Select(a => a.Value?.ToString());
-						}
+        /// <summary>
+        /// The event enumeration member.
+        /// </summary>
+        public TEvent Enum { get; }
 
-						cachedEvent = new CachedEvent(
-							e.GetType(),
-							true,
-							e.ToString(),
-							Convert.ToInt32(e),
-							parameterNames,
-							type?.TextChain?.Concat(new[] { e.ToString() }) ?? new[] { e.ToString() },
-							type?.NumberChain?.Concat(new[] { Convert.ToInt32(e) }) ?? new[] { Convert.ToInt32(e) });
+        static EventID()
+        {
+            sync = new ReaderWriterLockSlim();
+            typeCache = new Dictionary<Type, CachedItem>();
+            eventCache = new Dictionary<TEvent, CachedEvent>();
+        }
 
-						eventCache.Add(e, cachedEvent);
-					}
-					finally
-					{
-						sync.ExitWriteLock();
-					}
-				}
+        /// <summary>
+        /// Initializes a new instance of the <see cref="EventID"/> class.
+        /// </summary>
+        /// <param name="e">The event enum member.</param>
+        /// <param name="args">The event arguments.</param>
+        public EventID(TEvent e, params string[] args)
+            : base(textChain: null, numberChain: null, parameterNames: null, args: args)
+        {
+            this.Enum = e;
 
-				this.TextChain = cachedEvent.TextChain;
-				this.NumberChain = cachedEvent.NumberChain;
-				this.ParameterNames = cachedEvent.ParameterNames;
-			}
-			finally
-			{
-				sync.ExitUpgradeableReadLock();
-			}
-		}
+            sync.EnterUpgradeableReadLock();
+            try
+            {
+                if (!eventCache.TryGetValue(e, out var cachedEvent))
+                {
+                    // Cache event.
+                    sync.EnterWriteLock();
+                    try
+                    {
+                        var type = getTypeOrCacheType(e.GetType());
 
-		/// <summary>
-		/// Gets an event's <paramref name="type"/> if already cached or determines all
-		/// information and creates the cache item. Must be executed in a write-synced
-		/// environment.
-		/// </summary>
-		/// <param name="type">The type to find or cache.</param>
-		/// <returns>The cached type information.</returns>
-		static CachedItem getTypeOrCacheType(Type type)
-		{
-			// Handle type (or declaring type from recursion) is object or null.
-			if ((type == null) || (type == typeof(object))) return null;
+                        IEnumerable<string> parameterNames = null;
+                        var parametersAtts = from d in e.GetType().GetMember(e.ToString()).Single().GetCustomAttributesData()
+                                             where d.AttributeType.IsAssignableFrom(typeof(ParametersAttribute))
+                                             select d;
+                        var parametersAtt = parametersAtts.LastOrDefault();
+                        if (parametersAtt != null)
+                        {
+                            parameterNames = (parametersAtt.ConstructorArguments.OfType<CustomAttributeTypedArgument?>().FirstOrDefault()?.Value as ReadOnlyCollection<CustomAttributeTypedArgument>)?.Select(a => a.Value?.ToString());
+                        }
 
-			// If this type is already cached, return cached value.
-			if (typeCache.TryGetValue(type, out var cachedItem)) return cachedItem;
+                        cachedEvent = new CachedEvent(
+                            e.GetType(),
+                            true,
+                            e.ToString(),
+                            Convert.ToInt32(e),
+                            parameterNames,
+                            type?.TextChain?.Concat(new[] { e.ToString() }) ?? new[] { e.ToString() },
+                            type?.NumberChain?.Concat(new[] { Convert.ToInt32(e) }) ?? new[] { Convert.ToInt32(e) });
 
-			// Get cached base type or have it created.
-			CachedItem cachedParentItem = getTypeOrCacheType(type.DeclaringType);
-			var textChain = (cachedParentItem?.TextChain ?? new string[0]);
-			var numberChain = (cachedParentItem?.NumberChain ?? new int[0]);
+                        eventCache.Add(e, cachedEvent);
+                    }
+                    finally
+                    {
+                        sync.ExitWriteLock();
+                    }
+                }
 
-			// Get and cache information of this type.
-			var number = type.GetCustomAttributesData()
-							.Where(a => a.AttributeType == typeof(IDAttribute))
-							.LastOrDefault()
-							?.ConstructorArguments
-								.Single()
-								.Value as int?;
-			if (number != null)
-			{
-				textChain = textChain.Concat(new[] { type.Name });
-				numberChain = numberChain.Concat(new[] { (int)number });
+                this.TextChain = cachedEvent.TextChain;
+                this.NumberChain = cachedEvent.NumberChain;
+                this.ParameterNames = cachedEvent.ParameterNames;
+            }
+            finally
+            {
+                sync.ExitUpgradeableReadLock();
+            }
+        }
 
-				// Create new cached item.
-				cachedItem = new CachedItem(type, (number != null), type.Name, 0, textChain, numberChain);
-				typeCache.Add(type, cachedItem);
-				return cachedItem;
-			}
-			else
-			{
-				return cachedParentItem;
-			}
-		}
-	}
+        /// <summary>
+        /// Gets an event's <paramref name="type"/> if already cached or determines all
+        /// information and creates the cache item. Must be executed in a write-synced
+        /// environment.
+        /// </summary>
+        /// <param name="type">The type to find or cache.</param>
+        /// <returns>The cached type information.</returns>
+        static CachedItem getTypeOrCacheType(Type type)
+        {
+            // Handle type (or declaring type from recursion) is object or null.
+            if ((type == null) || (type == typeof(object))) return null;
 
-	/// <summary>
-	/// Represents an event ID attribute to put before any class, struct,
-	/// or enum definition to be given a designated number in a chained event ID.
-	/// </summary>
-	[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Enum)]
-	public class IDAttribute : Attribute
-	{
-		/// <summary>
-		/// Gets the event ID in this level.
-		/// </summary>
-		public int ID { get; }
+            // If this type is already cached, return cached value.
+            if (typeCache.TryGetValue(type, out var cachedItem)) return cachedItem;
 
-		/// <summary>
-		/// Initializes a new instance of the <see cref="IDAttribute"/> class.
-		/// </summary>
-		/// <param name="id">The event ID.</param>
-		public IDAttribute(int id)
-		{
-			this.ID = id;
-		}
-	}
+            // Get cached base type or have it created.
+            CachedItem cachedParentItem = getTypeOrCacheType(type.DeclaringType);
+            var textChain = (cachedParentItem?.TextChain ?? new string[0]);
+            var numberChain = (cachedParentItem?.NumberChain ?? new int[0]);
 
-	/// <summary>
-	/// Represents an event parameters attribute to put before any event enum member
-	/// to be assigned named parameters.
-	/// </summary>
-	[AttributeUsage(AttributeTargets.Field)]
-	public class ParametersAttribute : Attribute
-	{
-		/// <summary>
-		/// Gets the parameter names.
-		/// </summary>
-		public IEnumerable<string> ParameterNames { get; }
+            // Get and cache information of this type.
+            var number = type.GetCustomAttributesData()
+                            .Where(a => a.AttributeType == typeof(IDAttribute))
+                            .LastOrDefault()
+                            ?.ConstructorArguments
+                                .Single()
+                                .Value as int?;
+            if (number != null)
+            {
+                textChain = textChain.Concat(new[] { type.Name });
+                numberChain = numberChain.Concat(new[] { (int)number });
 
-		/// <summary>
-		/// Initializes a new instance of the <see cref="ParametersAttribute"/> class.
-		/// </summary>
-		/// <param name="parameterNames">The parameter names.</param>
-		public ParametersAttribute(params string[] parameterNames)
-		{
-			this.ParameterNames = parameterNames;
-		}
-	}
+                // Create new cached item.
+                cachedItem = new CachedItem(type, (number != null), type.Name, 0, textChain, numberChain);
+                typeCache.Add(type, cachedItem);
+                return cachedItem;
+            }
+            else
+            {
+                return cachedParentItem;
+            }
+        }
+    }
 
-	class CachedItem
-	{
-		public Type Type { get; }
-		public bool IsIncluded { get; }
-		public string Name { get; }
-		public int Number { get; }
-		public IEnumerable<string> TextChain { get; }
-		public IEnumerable<int> NumberChain { get; }
+    /// <summary>
+    /// Represents an event ID attribute to put before any class, struct,
+    /// or enum definition to be given a designated number in a chained event ID.
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Enum)]
+    public class IDAttribute : Attribute
+    {
+        /// <summary>
+        /// Gets the event ID in this level.
+        /// </summary>
+        public int ID { get; }
 
-		public CachedItem(Type type, bool isIncluded, string name, int number,
-			IEnumerable<string> textChain, IEnumerable<int> numberChain)
-		{
-			this.Type = type;
-			this.IsIncluded = isIncluded;
-			this.Name = name;
-			this.Number = number;
-			this.TextChain = textChain;
-			this.NumberChain = numberChain;
-		}
-	}
+        /// <summary>
+        /// Initializes a new instance of the <see cref="IDAttribute"/> class.
+        /// </summary>
+        /// <param name="id">The event ID.</param>
+        public IDAttribute(int id)
+        {
+            this.ID = id;
+        }
+    }
 
-	class CachedEvent : CachedItem
-	{
-		public IEnumerable<string> ParameterNames { get; }
+    /// <summary>
+    /// Represents an event parameters attribute to put before any event enum member
+    /// to be assigned named parameters.
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Field)]
+    public class ParametersAttribute : Attribute
+    {
+        /// <summary>
+        /// Gets the parameter names.
+        /// </summary>
+        public IEnumerable<string> ParameterNames { get; }
 
-		public CachedEvent(Type type, bool isIncluded, string name, int number,
-			IEnumerable<string> parameterNames, IEnumerable<string> textChain,
-			IEnumerable<int> numberChain)
-			: base(type, isIncluded, name, number, textChain, numberChain)
-		{
-			this.ParameterNames = parameterNames;
-		}
-	}
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ParametersAttribute"/> class.
+        /// </summary>
+        /// <param name="parameterNames">The parameter names.</param>
+        public ParametersAttribute(params string[] parameterNames)
+        {
+            this.ParameterNames = parameterNames;
+        }
+    }
 
-	/// <summary>
-	/// Implements extension methods for fluent event creation.
-	/// </summary>
-	public static class EventIDExtensions
-	{
-		/// <summary>
-		/// Adds an event ID <paramref name="e"/> to a <paramref name="logEvent"/>.
-		/// </summary>
-		/// <typeparam name="TLoglevel">The loglevel type.</typeparam>
-		/// <typeparam name="TEvent">The event type.</typeparam>
-		/// <param name="logEvent">The log event.</param>
-		/// <param name="e">The event.</param>
-		/// <param name="args">Arguments for the event <paramref name="e"/>.</param>
-		/// <returns><paramref name="logEvent"/></returns>
-		/// <exception cref="ArgumentNullException">Thrown if
-		///		<paramref name="logEvent"/> is null.</exception>
-		public static LogEvent<TLoglevel> Event<TLoglevel, TEvent>(this LogEvent<TLoglevel> logEvent,
-			TEvent e, params object[] args)
-			where TLoglevel : Enum
-			where TEvent : Enum
-		{
-			if (logEvent == null) throw new ArgumentNullException(nameof(logEvent));
+    class CachedItem
+    {
+        public Type Type { get; }
+        public bool IsIncluded { get; }
+        public string Name { get; }
+        public int Number { get; }
+        public IEnumerable<string> TextChain { get; }
+        public IEnumerable<int> NumberChain { get; }
 
-			if (e == null) return logEvent;
+        public CachedItem(Type type, bool isIncluded, string name, int number,
+            IEnumerable<string> textChain, IEnumerable<int> numberChain)
+        {
+            this.Type = type;
+            this.IsIncluded = isIncluded;
+            this.Name = name;
+            this.Number = number;
+            this.TextChain = textChain;
+            this.NumberChain = numberChain;
+        }
+    }
 
-			try
-			{
-				var eventID = new EventID<TEvent>(e, args?.Select(a =>
-				{
-					try
-					{
-						return a.ToString();
-					}
-					catch
-					{
-						return a?.GetType().FullName;
-					}
-				}).ToArray());
-				logEvent.Details.Add(eventID);
-			}
-			catch
-			{
-			}
+    class CachedEvent : CachedItem
+    {
+        public IEnumerable<string> ParameterNames { get; }
 
-			return logEvent;
-		}
-	}
+        public CachedEvent(Type type, bool isIncluded, string name, int number,
+            IEnumerable<string> parameterNames, IEnumerable<string> textChain,
+            IEnumerable<int> numberChain)
+            : base(type, isIncluded, name, number, textChain, numberChain)
+        {
+            this.ParameterNames = parameterNames;
+        }
+    }
+
+    /// <summary>
+    /// Implements extension methods for fluent event creation.
+    /// </summary>
+    public static class EventIDExtensions
+    {
+        /// <summary>
+        /// Adds an event ID <paramref name="e"/> to a <paramref name="logEvent"/>.
+        /// </summary>
+        /// <typeparam name="TLoglevel">The loglevel type.</typeparam>
+        /// <typeparam name="TEvent">The event type.</typeparam>
+        /// <param name="logEvent">The log event.</param>
+        /// <param name="e">The event.</param>
+        /// <param name="args">Arguments for the event <paramref name="e"/>.</param>
+        /// <returns><paramref name="logEvent"/></returns>
+        /// <exception cref="ArgumentNullException">Thrown if
+        ///		<paramref name="logEvent"/> is null.</exception>
+        public static LogEvent<TLoglevel> Event<TLoglevel, TEvent>(this LogEvent<TLoglevel> logEvent,
+            TEvent e, params object[] args)
+            where TLoglevel : Enum
+            where TEvent : Enum
+        {
+            if (logEvent == null) throw new ArgumentNullException(nameof(logEvent));
+
+            if (e == null) return logEvent;
+
+            try
+            {
+                var eventID = new EventID<TEvent>(e, args?.Select(a =>
+                {
+                    try
+                    {
+                        return a.ToString();
+                    }
+                    catch
+                    {
+                        return a?.GetType().FullName;
+                    }
+                }).ToArray());
+                logEvent.Details.Add(eventID);
+            }
+            catch
+            {
+            }
+
+            return logEvent;
+        }
+    }
 }
