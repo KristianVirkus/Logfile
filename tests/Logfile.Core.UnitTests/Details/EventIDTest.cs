@@ -109,10 +109,59 @@ namespace Logfile.Core.UnitTests.Details
 		}
 
 		[Test]
-		public void Constructor_Should_SetProperties()
+		public void ConstructorWithoutArguments_Should_SetProperties()
 		{
 			var eventID = new EventID(new[] { "A", "B", "C" }, new[] { 1, 2, 3 });
 			eventID.ToString().Should().Be("A.B.C (1.2.3)");
+		}
+
+		[Test]
+		public void ConstructorWithArguments_Should_SetProperties()
+		{
+			var eventID = new EventID(new[] { "A", "B", "C" }, new[] { 1, 2, 3 }, "arg1", "arg2", "arg3");
+			eventID.ToString().Should().Be(@"A.B.C (1.2.3) {""arg1"",""arg2"",""arg3""}");
+		}
+
+		[Test]
+		public void ConstructorWithParameterNamesNullAndArgumentsNull_Should_SetProperties()
+		{
+			var eventID = new EventID(new[] { "A", "B", "C" }, new[] { 1, 2, 3 }, parameterNames: null, args: null);
+			eventID.ToString().Should().Be(@"A.B.C (1.2.3)");
+		}
+
+		[Test]
+		public void ConstructorWithParameterNamesNullAndArgumentsEmpty_Should_SetProperties()
+		{
+			var eventID = new EventID(new[] { "A", "B", "C" }, new[] { 1, 2, 3 }, parameterNames: null, args: new string[0]);
+			eventID.ToString().Should().Be(@"A.B.C (1.2.3)");
+		}
+
+		[Test]
+		public void ConstructorWithParameterNamesAndArgumentsNull_Should_SetProperties()
+		{
+			var eventID = new EventID(new[] { "A", "B", "C" }, new[] { 1, 2, 3 }, parameterNames: new[] { "p1", "p2" }, args: new string[0]);
+			eventID.ToString().Should().Be(@"A.B.C (1.2.3)");
+		}
+
+		[Test]
+		public void ConstructorWithReducedParameterNamesAndMoreArguments_Should_SetProperties()
+		{
+			var eventID = new EventID(new[] { "A", "B", "C" }, new[] { 1, 2, 3 }, parameterNames: new[] { "p1", "p2" }, args: new[] { "arg1", "arg2", "arg3" });
+			eventID.ToString().Should().Be(@"A.B.C (1.2.3) {p1=""arg1"",p2=""arg2"",""arg3""}");
+		}
+
+		[Test]
+		public void ConstructorWithParameterNamesAndArgumentsIncludingNull_Should_SetProperties()
+		{
+			var eventID = new EventID(new[] { "A", "B", "C" }, new[] { 1, 2, 3 }, parameterNames: new[] { "p1", "p2" }, args: new[] { null, "arg2" });
+			eventID.ToString().Should().Be(@"A.B.C (1.2.3) {p1=null,p2=""arg2""}");
+		}
+
+		[Test]
+		public void ConstructorWithParameterNamesIncludingNullAndArguments_Should_SetProperties()
+		{
+			var eventID = new EventID(new[] { "A", "B", "C" }, new[] { 1, 2, 3 }, parameterNames: new[] { null, "p2" }, args: new[] { "arg1", "arg2" });
+			eventID.ToString().Should().Be(@"A.B.C (1.2.3) {""arg1"",p2=""arg2""}");
 		}
 
 		[Test]
