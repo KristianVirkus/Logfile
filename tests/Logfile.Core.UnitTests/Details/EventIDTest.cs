@@ -1,8 +1,7 @@
-﻿using NUnit.Framework;
-using FluentAssertions;
+﻿using FluentAssertions;
 using Logfile.Core.Details;
+using NUnit.Framework;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 
 namespace Logfile.Core.UnitTests.Details
@@ -278,6 +277,311 @@ namespace Logfile.Core.UnitTests.Details
 			var eventID = logEvent.Details.OfType<EventID<EventEnumWithoutAnyID.EventEnum>>().Single();
 			eventID.Enum.Should().Be(EventEnumWithoutAnyID.EventEnum.Event1);
 			eventID.ToString().Should().Be("Event1 (1)");
+		}
+
+		[Test]
+		public void ConstructorWithProductIDNullAndNoParameterNames_Should_SetProperties()
+		{
+			// Arrange
+			// Act
+			var obj = new EventID(
+				productID: null,
+				textChain: new[] { "a", "b" },
+				numberChain: new[] { 1, 2 },
+				args: new[] { "arg1", "arg2" });
+
+			// Assert
+			obj.ProductID.Should().BeNull();
+			obj.TextChain.Should().Contain("a", "b");
+			obj.NumberChain.Should().Contain(new[] { 1, 2 });
+			obj.StringArguments.Should().Contain("arg1", "arg2");
+		}
+
+		[Test]
+		public void ConstructorWithProductIDAndNoParameterNames_Should_SetProperties()
+		{
+			// Arrange
+			// Act
+			var obj = new EventID(
+				productID: "my-product",
+				textChain: new[] { "a", "b" },
+				numberChain: new[] { 1, 2 },
+				args: new[] { "arg1", "arg2" });
+
+			// Assert
+			obj.ProductID.Should().Be("my-product");
+			obj.TextChain.Should().Contain("a", "b");
+			obj.NumberChain.Should().Contain(new[] { 1, 2 });
+			obj.StringArguments.Should().Contain("arg1", "arg2");
+		}
+
+		[Test]
+		public void ConstructorWithProductIDNullAndWithParameterNames_Should_SetProperties()
+		{
+			// Arrange
+			// Act
+			var obj = new EventID(
+				productID: null,
+				textChain: new[] { "a", "b" },
+				numberChain: new[] { 1, 2 },
+				parameterNames: new[] { "p1", "p2" },
+				args: new[] { "arg1", "arg2" });
+
+			// Assert
+			obj.ProductID.Should().BeNull();
+			obj.TextChain.Should().Contain("a", "b");
+			obj.NumberChain.Should().Contain(new[] { 1, 2 });
+			obj.ParameterNames.Should().Contain("p1", "p2");
+			obj.StringArguments.Should().Contain("arg1", "arg2");
+		}
+
+		[Test]
+		public void ConstructorWithProductIDAndWithParameterNames_Should_SetProperties()
+		{
+			// Arrange
+			// Act
+			var obj = new EventID(
+				productID: "my-product",
+				textChain: new[] { "a", "b" },
+				numberChain: new[] { 1, 2 },
+				parameterNames: new[] { "p1", "p2" },
+				args: new[] { "arg1", "arg2" });
+
+			// Assert
+			obj.ProductID.Should().Be("my-product");
+			obj.TextChain.Should().Contain("a", "b");
+			obj.NumberChain.Should().Contain(new[] { 1, 2 });
+			obj.ParameterNames.Should().Contain("p1", "p2");
+			obj.StringArguments.Should().Contain("arg1", "arg2");
+		}
+
+		[ProductID("pitl")]
+		private static class TestProductIDTopLevel
+		{
+			[ID(1)]
+			public static class Nested1
+			{
+				[ID(2)]
+				public enum Events
+				{
+					Event = 7,
+				}
+			}
+		}
+
+		[Test]
+		public void ProductIDInSeparateTopLevelClass_Should_RetainProductIDInNestedItems()
+		{
+			// Arrange
+			var logEvent = new LogEvent<StandardLoglevel>(_ => { }, StandardLoglevel.Warning);
+
+			// Act
+			logEvent.Event(TestProductIDTopLevel.Nested1.Events.Event);
+
+			// Assert
+			logEvent.Details.OfType<EventID>().Single().ProductID.Should().Be("pitl");
+		}
+
+		[ProductID("top-level")]
+		private static class TestProductIDOverwrittenIn2ndNestedClass
+		{
+			[ID(1)]
+			public static class Nested1
+			{
+				[ProductID("nested2")]
+				[ID(2)]
+				public static class Nested2
+				{
+					[ID(3)]
+					public enum Events
+					{
+						Event = 7,
+					}
+				}
+			}
+		}
+
+		[Test]
+		public void ProductIDOverwrittenIn2ndNestedClass_Should_ReflectNestedProductID()
+		{
+			// Arrange
+			var logEvent = new LogEvent<StandardLoglevel>(_ => { }, StandardLoglevel.Warning);
+
+			// Act
+			logEvent.Event(TestProductIDOverwrittenIn2ndNestedClass.Nested1.Nested2.Events.Event);
+
+			// Assert
+			logEvent.Details.OfType<EventID>().Single().ProductID.Should().Be("nested2");
+		}
+
+		[ProductID("top-level")]
+		private static class TestProductIDOverwrittenWithNullInNestedClass
+		{
+			[ProductID(null)]
+			[ID(1)]
+			public static class Nested1
+			{
+				[ID(2)]
+				public enum Events
+				{
+					Event = 7,
+				}
+			}
+		}
+
+		[Test]
+		public void ProductIDOverwrittenWithNullInNestedClass_Should_KeepTopLevelProductID()
+		{
+			// Arrange
+			var logEvent = new LogEvent<StandardLoglevel>(_ => { }, StandardLoglevel.Warning);
+
+			// Act
+			logEvent.Event(TestProductIDOverwrittenWithNullInNestedClass.Nested1.Events.Event);
+
+			// Assert
+			logEvent.Details.OfType<EventID>().Single().ProductID.Should().Be("top-level");
+		}
+
+		[ProductID("top-level")]
+		private static class TestProductIDOverwrittenWithEmptyProductIDInNestedClass
+		{
+			[ProductID("")]
+			[ID(1)]
+			public static class Nested1
+			{
+				[ID(2)]
+				public enum Events
+				{
+					Event = 7,
+				}
+			}
+		}
+
+		[Test]
+		public void ProductIDOverwrittenWithEmptyProductIDInNestedClass_Should_RemoveProductID()
+		{
+			// Arrange
+			var logEvent = new LogEvent<StandardLoglevel>(_ => { }, StandardLoglevel.Warning);
+
+			// Act
+			logEvent.Event(TestProductIDOverwrittenWithEmptyProductIDInNestedClass.Nested1.Events.Event);
+
+			// Assert
+			logEvent.Details.OfType<EventID>().Single().ProductID.Should().BeNull();
+		}
+
+		[ProductID("top-level")]
+		[ID(1)]
+		private static class TestProductIDTogetherWithEventIDClass
+		{
+			[ID(2)]
+			public enum Events
+			{
+				Event = 7,
+			}
+		}
+
+		[Test]
+		public void ProductIDTogetherWithEventIDOnClass_Should_UseBothIDs()
+		{
+			// Arrange
+			var logEvent = new LogEvent<StandardLoglevel>(_ => { }, StandardLoglevel.Warning);
+
+			// Act
+			logEvent.Event(TestProductIDTogetherWithEventIDClass.Events.Event);
+
+			// Assert
+			logEvent.Details.OfType<EventID>().Single().ProductID.Should().Be("top-level");
+			logEvent.Details.OfType<EventID>().Single().NumberChain.Should().Contain(new[] { 1, 2, 7 });
+		}
+
+		[ProductID("top-level")]
+		[ID(1)]
+		public enum TestProductIDTogetherWithEventIDEnum
+		{
+			Event = 7,
+		}
+
+		[Test]
+		public void ProductIDTogetherWithEventIDOnEnum_Should_UseBothIDs()
+		{
+			// Arrange
+			var logEvent = new LogEvent<StandardLoglevel>(_ => { }, StandardLoglevel.Warning);
+
+			// Act
+			logEvent.Event(TestProductIDTogetherWithEventIDEnum.Event);
+
+			// Assert
+			logEvent.Details.OfType<EventID>().Single().ProductID.Should().Be("top-level");
+			logEvent.Details.OfType<EventID>().Single().NumberChain.Should().Contain(new[] { 1, 7 });
+		}
+
+		[Test]
+		public void OverriddenProductID_Should_BeOutputByToString()
+		{
+			// Arrange
+			var logEvent = new LogEvent<StandardLoglevel>(_ => { }, StandardLoglevel.Warning);
+
+			// Act
+			logEvent.Event(TestProductIDOverwrittenIn2ndNestedClass.Nested1.Nested2.Events.Event, "arg1", "arg2");
+
+			// Assert
+			logEvent.Details.OfType<EventID>().Single().ToString().Should().Be(@"nested2/Nested1.Nested2.Events.Event (nested2/1.2.3.7) {""arg1"",""arg2""}");
+		}
+
+		[Test]
+		public void ProductIDConstructorWithIDNull_Should_SetProperties()
+		{
+			// Arrange
+			// Act
+			var obj = new ProductIDAttribute(id: null);
+
+			// Assert
+			obj.ID.Should().BeNull();
+		}
+
+		[Test]
+		public void ProductIDConstructorWithID_Should_SetProperties()
+		{
+			// Arrange
+			// Act
+			var obj = new ProductIDAttribute(id: "test");
+
+			// Assert
+			obj.ID.Should().Be("test");
+		}
+
+		[Test]
+		public void EventIDConstructor_Should_SetProperties()
+		{
+			// Arrange
+			// Act
+			var obj = new IDAttribute(id: 1337);
+
+			// Assert
+			obj.ID.Should().Be(1337);
+		}
+
+		[Test]
+		public void ParametersConstructorWithParameterNamesNull_Should_SetProperties()
+		{
+			// Arrange
+			// Act
+			var obj = new ParametersAttribute(parameterNames: null);
+
+			// Assert
+			obj.ParameterNames.Should().BeNull();
+		}
+
+		[Test]
+		public void ParametersConstructorWithParameterNames_Should_SetProperties()
+		{
+			// Arrange
+			// Act
+			var obj = new ParametersAttribute("p1", "p2");
+
+			// Assert
+			obj.ParameterNames.Should().Contain("p1", "p2");
 		}
 	}
 }
