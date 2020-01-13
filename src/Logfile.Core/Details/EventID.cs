@@ -14,6 +14,11 @@ namespace Logfile.Core.Details
 	public class EventID
 	{
 		/// <summary>
+		/// Gets the product ID representing the event.
+		/// </summary>
+		public string ProductID { get; protected set; }
+
+		/// <summary>
 		/// Gets the chain of texts representing the event.
 		/// </summary>
 		public IEnumerable<string> TextChain { get; protected set; }
@@ -24,29 +29,131 @@ namespace Logfile.Core.Details
 		public IEnumerable<int> NumberChain { get; protected set; }
 
 		/// <summary>
+		/// Gets the event parameter names.
+		/// </summary>
+		public IEnumerable<string> ParameterNames { get; protected set; }
+
+		/// <summary>
+		/// The event arguments.
+		/// </summary>
+		public IEnumerable<string> StringArguments { get; }
+
+		/// <summary>
 		/// Initializes a new instance of the <see cref="EventID"/> class.
 		/// </summary>
 		/// <param name="textChain">The chain of texts representing
 		///		the event.</param>
 		/// <param name="numberChain">The chain of numbers representing
 		///		the event.</param>
-		public EventID(IEnumerable<string> textChain, IEnumerable<int> numberChain)
+		/// <param name="args">The event arguments.</param>
+		public EventID(IEnumerable<string> textChain, IEnumerable<int> numberChain,
+			params string[] args)
 		{
 			this.TextChain = textChain;
 			this.NumberChain = numberChain;
+			this.StringArguments = args;
+		}
+
+		/// <summary>
+		/// Initializes a new instance of the <see cref="EventID"/> class.
+		/// </summary>
+		/// <param name="productID">The product ID.</param>
+		/// <param name="textChain">The chain of texts representing
+		///		the event.</param>
+		/// <param name="numberChain">The chain of numbers representing
+		///		the event.</param>
+		/// <param name="args">The event arguments.</param>
+		public EventID(string productID, IEnumerable<string> textChain, IEnumerable<int> numberChain,
+			params string[] args)
+		{
+			this.ProductID = productID;
+			this.TextChain = textChain;
+			this.NumberChain = numberChain;
+			this.StringArguments = args;
+		}
+
+		/// <summary>
+		/// Initializes a new instance of the <see cref="EventID"/> class.
+		/// </summary>
+		/// <param name="textChain">The chain of texts representing
+		///		the event.</param>
+		/// <param name="numberChain">The chain of numbers representing
+		///		the event.</param>
+		///	<param name="parameterNames">The parameter names.</param>
+		/// <param name="args">The event arguments.</param>
+		public EventID(IEnumerable<string> textChain, IEnumerable<int> numberChain,
+			IEnumerable<string> parameterNames, IEnumerable<string> args)
+		{
+			this.TextChain = textChain;
+			this.NumberChain = numberChain;
+			this.ParameterNames = parameterNames;
+			this.StringArguments = args;
+		}
+
+		/// <summary>
+		/// Initializes a new instance of the <see cref="EventID"/> class.
+		/// </summary>
+		/// <param name="productID">The product ID.</param>
+		/// <param name="textChain">The chain of texts representing
+		///		the event.</param>
+		/// <param name="numberChain">The chain of numbers representing
+		///		the event.</param>
+		///	<param name="parameterNames">The parameter names.</param>
+		/// <param name="args">The event arguments.</param>
+		public EventID(string productID, IEnumerable<string> textChain, IEnumerable<int> numberChain,
+			IEnumerable<string> parameterNames, IEnumerable<string> args)
+		{
+			this.ProductID = productID;
+			this.TextChain = textChain;
+			this.NumberChain = numberChain;
+			this.ParameterNames = parameterNames;
+			this.StringArguments = args;
 		}
 
 		public override string ToString()
 		{
 			var sb = new StringBuilder();
 
+			// Text
+			if (this.ProductID != null && this.TextChain?.Any() == true)
+				sb.Append($"{this.ProductID}/");
 			sb.Append(string.Join(".", this.TextChain ?? new string[0]));
 
+			// Numbers
 			var numbers = string.Join(".", this.NumberChain ?? new int[0]);
 			if (numbers.Length > 0)
 			{
-				if (sb.Length > 0) numbers = $" ({numbers})";
+				var wrapInParenthesis = sb.Length > 0;
+				if (wrapInParenthesis) sb.Append(" (");
+				if (this.ProductID != null) sb.Append($"{this.ProductID}/");
 				sb.Append(numbers);
+				if (wrapInParenthesis) sb.Append(")");
+			}
+
+			// Arguments
+			if (this.StringArguments?.Any() == true)
+			{
+				sb.Append(" {");
+				int i = 0;
+				foreach (var arg in this.StringArguments)
+				{
+					if (i > 0)
+						sb.Append(",");
+					if (this.ParameterNames?.Count() >= i + 1)
+					{
+						var parameterName = this.ParameterNames.ElementAt(i);
+						if (parameterName != null)
+							sb.Append($"{parameterName}=");
+					}
+
+					if (arg == null)
+						sb.Append("null");
+					else
+						sb.Append($@"""{arg}""");
+					++i;
+				}
+
+				sb.Append("}");
 			}
 
 			return sb.ToString();
@@ -69,16 +176,6 @@ namespace Logfile.Core.Details
 		/// </summary>
 		public TEvent Enum { get; }
 
-		/// <summary>
-		/// Gets the event parameter names.
-		/// </summary>
-		public IEnumerable<string> ParameterNames { get; }
-
-		/// <summary>
-		/// The event arguments.
-		/// </summary>
-		public IEnumerable<string> StringArguments { get; }
-
 		static EventID()
 		{
 			sync = new ReaderWriterLockSlim();
@@ -92,10 +189,9 @@ namespace Logfile.Core.Details
 		/// <param name="e">The event enum member.</param>
 		/// <param name="args">The event arguments.</param>
 		public EventID(TEvent e, params string[] args)
-			: base(null, null)
+			: base(textChain: null, numberChain: null, parameterNames: null, args: args)
 		{
 			this.Enum = e;
-			this.StringArguments = args;
 
 			sync.EnterUpgradeableReadLock();
 			try
@@ -121,6 +217,7 @@ namespace Logfile.Core.Details
 						cachedEvent = new CachedEvent(
 							e.GetType(),
 							true,
+							type?.ProductID,
 							e.ToString(),
 							Convert.ToInt32(e),
 							parameterNames,
@@ -135,6 +232,7 @@ namespace Logfile.Core.Details
 					}
 				}
 
+				this.ProductID = cachedEvent.ProductID;
 				this.TextChain = cachedEvent.TextChain;
 				this.NumberChain = cachedEvent.NumberChain;
 				this.ParameterNames = cachedEvent.ParameterNames;
@@ -165,6 +263,17 @@ namespace Logfile.Core.Details
 			var textChain = (cachedParentItem?.TextChain ?? new string[0]);
 			var numberChain = (cachedParentItem?.NumberChain ?? new int[0]);
 
+			// Use most recent product ID of any parent item.
+			var applicableProductID = cachedItem?.ProductID ?? cachedParentItem?.ProductID;
+			var productID = type.GetCustomAttributesData()
+								.Where(a => a.AttributeType == typeof(ProductIDAttribute))
+								.LastOrDefault()
+								?.ConstructorArguments
+									.Single()
+									.Value as string;
+			// Use this item's product ID if set.
+			if (productID != null) applicableProductID = (productID == "" ? null : productID);
+
 			// Get and cache information of this type.
 			var number = type.GetCustomAttributesData()
 							.Where(a => a.AttributeType == typeof(IDAttribute))
@@ -174,18 +283,47 @@ namespace Logfile.Core.Details
 								.Value as int?;
 			if (number != null)
 			{
+				// Number specified, thus extend chains.
 				textChain = textChain.Concat(new[] { type.Name });
 				numberChain = numberChain.Concat(new[] { (int)number });
+			}
 
+			if (number != null || productID != null)
+			{
 				// Create new cached item.
-				cachedItem = new CachedItem(type, (number != null), type.Name, 0, textChain, numberChain);
+				cachedItem = new CachedItem(type, (applicableProductID != null && number != null),
+					applicableProductID, type.Name, 0, textChain, numberChain);
 				typeCache.Add(type, cachedItem);
 				return cachedItem;
 			}
 			else
 			{
+				// Nothing new specified on this level.
 				return cachedParentItem;
 			}
+		}
+	}
+
+	/// <summary>
+	/// Represents a product ID attribute to put on any top-level event class, struct,
+	/// or enum definition to be given a designated name in a chained event ID.
+	/// </summary>
+	[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Enum)]
+	public class ProductIDAttribute : Attribute
+	{
+		/// <summary>
+		/// Gets the product ID.
+		/// </summary>
+		public string ID { get; }
+
+		/// <summary>
+		/// Initializes a new instance of the <see cref="ProductIDAttribute"/> class.
+		/// </summary>
+		/// <param name="id">The product ID. Use empty string to remove inherited
+		///		product ID. Null gets ignored.</param>
+		public ProductIDAttribute(string id)
+		{
+			this.ID = id;
 		}
 	}
 
@@ -237,16 +375,18 @@ namespace Logfile.Core.Details
 	{
 		public Type Type { get; }
 		public bool IsIncluded { get; }
+		public string ProductID { get; }
 		public string Name { get; }
 		public int Number { get; }
 		public IEnumerable<string> TextChain { get; }
 		public IEnumerable<int> NumberChain { get; }
 
-		public CachedItem(Type type, bool isIncluded, string name, int number,
-			IEnumerable<string> textChain, IEnumerable<int> numberChain)
+		public CachedItem(Type type, bool isIncluded, string productID, string name,
+			int number, IEnumerable<string> textChain, IEnumerable<int> numberChain)
 		{
 			this.Type = type;
 			this.IsIncluded = isIncluded;
+			this.ProductID = productID;
 			this.Name = name;
 			this.Number = number;
 			this.TextChain = textChain;
@@ -258,10 +398,10 @@ namespace Logfile.Core.Details
 	{
 		public IEnumerable<string> ParameterNames { get; }
 
-		public CachedEvent(Type type, bool isIncluded, string name, int number,
-			IEnumerable<string> parameterNames, IEnumerable<string> textChain,
+		public CachedEvent(Type type, bool isIncluded, string productID, string name,
+			int number, IEnumerable<string> parameterNames, IEnumerable<string> textChain,
 			IEnumerable<int> numberChain)
-			: base(type, isIncluded, name, number, textChain, numberChain)
+			: base(type, isIncluded, productID, name, number, textChain, numberChain)
 		{
 			this.ParameterNames = parameterNames;
 		}
