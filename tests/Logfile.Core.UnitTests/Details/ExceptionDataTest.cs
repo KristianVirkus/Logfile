@@ -69,7 +69,7 @@ namespace Logfile.Core.UnitTests.Details
 				StandardLoglevel.Warning);
 
 			// Assert
-			logEvent.Time.Should().BeCloseTo(DateTime.Now);
+			logEvent.Time.Should().BeCloseTo(DateTime.Now, TimeSpan.FromSeconds(1));
 		}
 
 		[Test]
